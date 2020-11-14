@@ -263,6 +263,11 @@ func (s *testParserSuite) TestSimple(c *C) {
 	expr = sel.Fields.Fields[0]
 	vExpr = expr.Expr.(*test_driver.ValueExpr)
 	c.Assert(vExpr.Kind(), Equals, test_driver.KindUint64)
+
+	// for issue #14297
+	src = "insert into t select 1 where 1 = 1;"
+	st, err = parser.ParseOneStmt(src, "", "")
+	c.Assert(err, IsNil)
 }
 
 func (s *testParserSuite) TestSpecialComments(c *C) {
@@ -790,11 +795,14 @@ func (s *testParserSuite) TestDMLStmt(c *C) {
 		// for dual
 		{"select 1 from dual", true, "SELECT 1"},
 		{"select 1 from dual limit 1", true, "SELECT 1 LIMIT 1"},
-		{"select 1 where exists (select 2)", false, ""},
+		{"select 1 where exists (select 2)", true, "SELECT 1 FROM DUAL WHERE EXISTS (SELECT 2)"},
 		{"select 1 from dual where not exists (select 2)", true, "SELECT 1 FROM DUAL WHERE NOT EXISTS (SELECT 2)"},
 		{"select 1 as a from dual order by a", true, "SELECT 1 AS `a` ORDER BY `a`"},
 		{"select 1 as a from dual where 1 < any (select 2) order by a", true, "SELECT 1 AS `a` FROM DUAL WHERE 1<ANY (SELECT 2) ORDER BY `a`"},
 		{"select 1 order by 1", true, "SELECT 1 ORDER BY 1"},
+		{"select 1", true, "SELECT 1"},
+		{"select 1 where 1 = 1", true, "SELECT 1 FROM DUAL WHERE 1=1"},
+		{"select 1 limit 1", true, "SELECT 1 LIMIT 1"},
 
 		// for https://github.com/pingcap/tidb/issues/320
 		{`(select 1);`, true, "(SELECT 1)"},
@@ -4085,6 +4093,8 @@ func (s *testParserSuite) TestUnionOrderBy(c *C) {
 		{"(select 2 as a from dual order by a) union select 1 as b from dual order by a", []bool{true, false, true}},
 		{"select 1 a, 2 b from dual order by a", []bool{true}},
 		{"select 1 a, 2 b from dual", []bool{false}},
+		{"select 1 a, 2 b order by a", []bool{true}},
+		{"select 1 a, 2 b", []bool{false}},
 	}
 
 	for _, t := range tests {
